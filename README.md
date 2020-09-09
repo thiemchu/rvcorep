@@ -57,7 +57,7 @@ We also add Verilog code for simulating the DRAM-based design in which we emulat
    ```
    For example, the command
    ```lang-bash
-   ./vivado_slurm.sh 8 20192
+   ./vivado.sh 8 20192
    ```
    will synthesize the design with Vivado 2019.2 using 8 parallel threads.
    
