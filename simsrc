@@ -1,0 +1,9 @@
+config.vh
+proc.v
+uart.v
+common/async_fifo.v
+common/sync_fifo.v
+sim/dram_emulator.v
+sim/data_memory_emulator.v
+sim/main_emulator.v
+sim/top.v
