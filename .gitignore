@@ -2,3 +2,8 @@
 clk_wiz_1/
 !clk_wiz_1/*.xci
 vivado/
+simv
+simv.daidir/
+csrc/
+ucli.key
+AN.DB
