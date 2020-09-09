@@ -34,9 +34,9 @@ We also add Verilog code for simulating the DRAM-based design in which we emulat
 ## Some important parameters in ```config.h```
  - ```MEM_FILE```: path to the verification program (this parameter is used only in simulation)
  - ```MEM_SIZE```: must be set appropriately according to the size of the verification programs
-   - Verification programs in ```verification/test```: ```MEM_SIZE``` should be set to 1024*4 (4KB)
-   - Verification programs in ```verification/bench```: ```MEM_SIZE``` should be set to 1024*32 (32KB)
-   - Verification programs in ```verification/embench```: ```MEM_SIZE``` should be set to 1024*64 (64KB)
+   - Verification programs in ```verification/test/```: ```MEM_SIZE``` should be set to 1024*4 (4KB)
+   - Verification programs in ```verification/bench/```: ```MEM_SIZE``` should be set to 1024*32 (32KB)
+   - Verification programs in ```verification/embench/```: ```MEM_SIZE``` should be set to 1024*64 (64KB)
  - ```SERIAL_WCNT```: must be set appropriately according to the frequency of the clock for the processor core and the desired baud rate for the serial port. For example, if the frequency of the clock for the processor core is 100MHz and the desired baud rate is 1MegaBaud, ```SERIAL_WCNT``` should be set to 100.
 
 ## Synthesis
@@ -63,7 +63,7 @@ We also add Verilog code for simulating the DRAM-based design in which we emulat
    
    **Note**: similar to the ```vivado_slurm.sh``` script, you may need to edit the Vivado installation path.
 
-**Program the FPGA and execute a verification program**: after programming the FPGA, use the ```serial_rvcorep.py``` python script to send a verification program to the FPGA. For example, the command
+**Program the FPGA and execute a verification program**: after programming the FPGA, use the ```serial_rvcorep.py``` python script in ```verification/``` to send a verification program to the FPGA ([pySerial](https://pythonhosted.org/pyserial/pyserial.html#installation) is required to run this script). For example, the command
 ``` lang-bash
 python3 serial_rvcorep.py 1 test/test.bin
 ```
