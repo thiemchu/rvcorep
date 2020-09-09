@@ -1,4 +1,10 @@
 .Xil/
+dram/clk_wiz_0/*
+!dram/clk_wiz_0/*.xci
+dram/mig_7series_0/*
+!dram/mig_7series_0/*.xci
+!dram/mig_7series_0/*.prj
+!dram/mig_7series_0/mig_arty_a7.ucf
 clk_wiz_1/
 !clk_wiz_1/*.xci
 vivado/

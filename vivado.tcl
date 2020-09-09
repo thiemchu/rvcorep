@@ -20,6 +20,23 @@ proc show_period_freq { period_ns } {
     return "[format_fp $period_ns]ns ([format_fp [freq_mhz $period_ns]]MHz)"
 }
 
+proc synthesize_ip { ip_dir ip_list } {
+    foreach i $ip_list {
+        if [file exists "${ip_dir}/${i}/${i}.dcp"] {
+            read_checkpoint "${ip_dir}/${i}/${i}.dcp"
+        } else {
+            read_ip "${ip_dir}/${i}/${i}.xci"
+            set locked [get_property IS_LOCKED [get_ips ${i}]]
+            set upgrade [get_property UPGRADE_VERSIONS [get_ips ${i}]]
+            if {$locked && $upgrade != ""} {
+                upgrade_ip [get_ips ${i}]
+            }
+            generate_target all [get_ips ${i}]
+            synth_ip [get_ips ${i}]
+        }
+    }
+}
+
 #########################################################################
 
 config_webtalk -user off
@@ -37,22 +54,8 @@ set_param general.maxThreads $vivado_num_threads
 # assemble the design source files
 
 # ip files
-#set ip_list [list dram/clk_wiz_0 dram/mig_7series_0 clk_wiz_1]
-set ip_list [list clk_wiz_1]
-foreach i $ip_list {
-    if [file exists "${i}/${i}.dcp"] {
-        read_checkpoint "${i}/${i}.dcp"
-    } else {
-        read_ip "${i}/${i}.xci"
-        set locked [get_property IS_LOCKED [get_ips ${i}]]
-        set upgrade [get_property UPGRADE_VERSIONS [get_ips ${i}]]
-        if {$locked && $upgrade != ""} {
-            upgrade_ip [get_ips ${i}]
-        }
-        generate_target all [get_ips ${i}]
-        synth_ip [get_ips ${i}]
-    }
-}
+synthesize_ip "dram" [list clk_wiz_0 mig_7series_0]
+synthesize_ip "." [list clk_wiz_1]
 
 # verilog files
 read_verilog {
@@ -60,6 +63,12 @@ read_verilog {
 }
 set_property is_global_include true [get_files config.vh]
 read_verilog {
+    common/async_fifo.v
+    common/sync_fifo.v
+    dram/dram.v
+    dram/dram_controller.v
+    dram/mig_ui.v
+    data_memory.v
     main.v
     proc.v
     uart.v

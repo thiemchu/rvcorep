@@ -1,16 +1,6 @@
 /********************************************************************************************/
 /* RVCoreP (RISC-V Core Pipelining) v2019-11-19a (t111) since 2018-08-07 ArchLab. TokyoTech */
 /********************************************************************************************/
-`include "config.vh"
-/********************************************************************************************/
-
-`define D_SYNC_IMEM
-`define D_SYNC_DMEM
-`define D_SIMPLE_DFWD  /* use single data-forwarding logic */
-//`define D_SIMPLE_ALU   /* use simple ALU using case structure */
-//`define D_SIMPLE_DMOUT /* use simple align and mask unit for DMEM */
-//`define D_SIMPLE_BTB   /* use single cycle BTB instead of two cycle version */
-/********************************************************************************************/
 
 /** some definitions, do not change these values                                           **/
 /********************************************************************************************/
@@ -31,24 +21,27 @@
 `define ALU_CTRL_SRA___ 4'hD
   
 /********************************************************************************************/  
-module regfile(CLK, rs1, rs2, rdata1, rdata2, WE, rd, wdata);
+module regfile(CLK, rs1, rs2, rdata1, rdata2, WE, rd, wdata, D_STALL);
     input  wire        CLK;
     input  wire [ 4:0] rs1, rs2;
     output wire [31:0] rdata1, rdata2;
     input  wire        WE;
     input  wire [ 4:0] rd;
     input  wire [31:0] wdata;
+    input  wire        D_STALL;
 
     reg [31:0] mem [0:31];
     integer i; initial begin for(i=0; i<32; i=i+1) mem[i]=0; end
 
     assign rdata1 = (rs1 == 0) ? 0 : (rs1==rd) ? wdata : mem[rs1];
     assign rdata2 = (rs2 == 0) ? 0 : (rs2==rd) ? wdata : mem[rs2];
-    always @(posedge CLK) if(WE && (rd!=0)) mem[rd] <= wdata;
+    always @(posedge CLK) begin
+        if (!D_STALL) begin
+            if(WE && (rd!=0)) mem[rd] <= wdata;
+        end
+    end
 endmodule
 
-`ifdef D_SYNC_IMEM
-/********************************************************************************************/
 /********************************************************************************************/
 module m_IMEM#(parameter WIDTH=32, ENTRY=256)(CLK, WE, WADDR, RADDR, IDATA, ODATA);
     input  wire                     CLK, WE;
@@ -59,143 +52,44 @@ module m_IMEM#(parameter WIDTH=32, ENTRY=256)(CLK, WE, WADDR, RADDR, IDATA, ODAT
 //    initial $write("Config: Sync_IMEM is used\n");
     
     (* ram_style = "block" *) reg [WIDTH-1:0] mem[0:ENTRY-1];
-
     reg [$clog2(ENTRY)-1:0] r_addr=0;
     always @(posedge CLK) begin
         if (WE) mem[WADDR] <= IDATA;
         ODATA <= mem[RADDR];
     end
 endmodule
-`else
+
 /********************************************************************************************/
-module m_IMEM#(parameter WIDTH=32, ENTRY=256)(CLK, WE, WADDR, RADDR, IDATA, ODATA);
-    input  wire                     CLK, WE;
-    input  wire [$clog2(ENTRY)-1:0] WADDR;
-    input  wire [$clog2(ENTRY)-1:0] RADDR;
-    input  wire [WIDTH-1:0]         IDATA;
-    output wire [WIDTH-1:0]         ODATA;
-
-    initial $write("Config: Async_IMEM is used\n");
-    
-    (* ram_style = "block" *) reg [WIDTH-1:0] mem[0:ENTRY-1];
-    reg [$clog2(ENTRY)-1:0] r_addr=0;
-    always @(posedge CLK) begin
-        if (WE) mem[WADDR] <= IDATA;
-        r_addr <= RADDR;
-    end
-    assign ODATA = mem[r_addr];
-endmodule
-`endif
-
-`ifdef D_SYNC_DMEM
-/********************************************************************************************/
-/********************************************************************************************/
-module m_DMEM#(parameter WIDTH=32, ENTRY=256)(CLK1, EN1, WE1, ADDR1, IDATA1, ODATA1, 
-                                              CLK2, EN2, WE2, ADDR2, IDATA2, ODATA2);
-    input  wire                     CLK1, EN1, EN2;
-    input  wire [3:0]               WE1;
-    input  wire [$clog2(ENTRY)-1:0] ADDR1;
-    input  wire [WIDTH-1:0]         IDATA1;
-    output reg  [WIDTH-1:0]         ODATA1;
-    input  wire                     CLK2;
-    input  wire [3:0]               WE2;
-    input  wire [$clog2(ENTRY)-1:0] ADDR2;
-    input  wire [WIDTH-1:0]         IDATA2;
-    output reg  [WIDTH-1:0]         ODATA2;
-//    initial $write("Config: Sync_DMEM is used\n");
-    
-    (* ram_style = "block" *) reg [WIDTH-1:0] mem[0:ENTRY-1];
-
-    always @(posedge CLK1) begin
-        if(EN1) begin
-            if (WE1[0]) mem[ADDR1][ 7: 0] <= IDATA1[ 7: 0];
-            if (WE1[1]) mem[ADDR1][15: 8] <= IDATA1[15: 8];
-            if (WE1[2]) mem[ADDR1][23:16] <= IDATA1[23:16];
-            if (WE1[3]) mem[ADDR1][31:24] <= IDATA1[31:24];
-            ODATA1 <= mem[ADDR1];
-        end
-    end
-
-    always @(posedge CLK2) begin
-        if(EN2) begin
-            if (WE2[0]) mem[ADDR2][ 7: 0] <= IDATA2[ 7: 0];
-            if (WE2[1]) mem[ADDR2][15: 8] <= IDATA2[15: 8];
-            if (WE2[2]) mem[ADDR2][23:16] <= IDATA2[23:16];
-            if (WE2[3]) mem[ADDR2][31:24] <= IDATA2[31:24];
-            ODATA2 <= mem[ADDR2];
-        end
-    end
-
-endmodule
-`else
-/********************************************************************************************/
-module m_DMEM#(parameter WIDTH=32, ENTRY=256)(CLK1, EN1, WE1, ADDR1, IDATA1, ODATA1, 
-                                              CLK2, EN2, WE2, ADDR2, IDATA2, ODATA2);
-    input  wire                     CLK1, EN1, EN2;
-    input  wire [3:0]               WE1;
-    input  wire [$clog2(ENTRY)-1:0] ADDR1;
-    input  wire [WIDTH-1:0]         IDATA1;
-    output wire [WIDTH-1:0]         ODATA1;
-    input  wire                     CLK2;
-    input  wire [3:0]               WE2;
-    input  wire [$clog2(ENTRY)-1:0] ADDR2;
-    input  wire [WIDTH-1:0]         IDATA2;
-    output wire [WIDTH-1:0]         ODATA2;
-
-    initial $write("Config: Async_DMEM is used\n");
-    
-    (* ram_style = "block" *) reg [WIDTH-1:0] mem[0:ENTRY-1];
-    reg [$clog2(ENTRY)-1:0] r_addr1=0;
-    reg [$clog2(ENTRY)-1:0] r_addr2=0;
-    always @(posedge CLK1) begin
-        if(EN1) begin
-            if (WE1[0]) mem[ADDR1][ 7: 0] <= IDATA1[ 7: 0];
-            if (WE1[1]) mem[ADDR1][15: 8] <= IDATA1[15: 8];
-            if (WE1[2]) mem[ADDR1][23:16] <= IDATA1[23:16];
-            if (WE1[3]) mem[ADDR1][31:24] <= IDATA1[31:24];
-            r_addr1 <= ADDR1;
-        end
-    end
-    assign ODATA1 = mem[r_addr1];
-    always @(posedge CLK2) begin
-        if(EN2) begin
-            if (WE2[0]) mem[ADDR2][ 7: 0] <= IDATA2[ 7: 0];
-            if (WE2[1]) mem[ADDR2][15: 8] <= IDATA2[15: 8];
-            if (WE2[2]) mem[ADDR2][23:16] <= IDATA2[23:16];
-            if (WE2[3]) mem[ADDR2][31:24] <= IDATA2[31:24];
-            r_addr2 <= ADDR2;
-        end
-    end
-    assign ODATA2 = mem[r_addr2];
-endmodule
-`endif
-  
 /* Branch Target Buffer (BTB) : valid(1bit) + tag(7bit) + data(18bit) + cnt(2bit) = 28bit   */
 /********************************************************************************************/
-module m_BTB(CLK, WE, WADDR, IDATA, RADDR, ODATA);
+module m_BTB(CLK, WE, WADDR, IDATA, RADDR, ODATA, D_STALL);
     input  wire  CLK;
     input  wire  WE;
     input  wire  [8:0]  WADDR, RADDR;
     input  wire  [27:0] IDATA;
     output reg   [27:0] ODATA;
+    input  wire         D_STALL;
 
     (* ram_style = "block" *) reg [27:0] mem[0:511];
     integer i; initial begin for(i=0; i<512; i=i+1) mem[i]=0; end
     
     always @(posedge CLK) begin
-        if (WE) mem[WADDR] <= IDATA;
-        ODATA <= mem[RADDR];
+        if (!D_STALL) begin
+            if (WE) mem[WADDR] <= IDATA;
+            ODATA <= mem[RADDR];
+        end
     end
 endmodule
 
 /********************************************************************************************/
-module m_PHT(CLK, WE, IDATA, pPC, BHR, ODATA);
+module m_PHT(CLK, WE, IDATA, pPC, BHR, ODATA, D_STALL);
     input  wire  CLK;
     input  wire  WE;
     input  wire  [12:0] pPC;
     input  wire  [12:0] BHR;
     input  wire  [14:0] IDATA;
     output wire  [14:0] ODATA;
+    input  wire         D_STALL;
 
     (* ram_style = "block" *) reg [1:0] mem[0:8191];
     integer i; initial for(i=0; i<8192; i=i+1) mem[i]=2; /* init by weakly-taken */
@@ -205,58 +99,17 @@ module m_PHT(CLK, WE, IDATA, pPC, BHR, ODATA);
     reg  [ 1:0] TBC   = 0;        // two-bit saturating counter
     wire [12:0] index = PC ^ BHR; // index, compute using Ex-or for Gshare
     always @(posedge CLK) begin
-        if (WE) mem[IDATA[14:2]] <= IDATA[1:0];
-        TBC   <= mem[index];
-        PC    <= pPC;
-        IDX_u <= index;
+        if (!D_STALL) begin
+            if (WE) mem[IDATA[14:2]] <= IDATA[1:0];
+            TBC   <= mem[index];
+            PC    <= pPC;
+            IDX_u <= index;
+        end
     end
     assign ODATA = {IDX_u, TBC};
 endmodule
 /********************************************************************************************/
 
-`ifdef D_SIMPLE_ALU
-/********************************************************************************************/
-/********************************************************************************************/
-module m_ALU (in1, in2, imm, sel, result, bsel, out);
-    input  wire [31:0] in1, in2, imm;
-    input  wire [10:0] sel;     // select signal for ALU
-    output wire [31:0] result;  // output data of ALU
-    input  wire  [6:0] bsel;    // select signal for BRU (Branch Resolution Unit)
-    output wire  [6:0] out;     // output data of BRU
-    
-    wire signed [31:0] sin1 = in1;
-    wire signed [31:0] sin2 = in2;
-
-    initial $write("Config: Simple ALU is used\n");
-    
-    reg [31: 0] r_result;
-    always @(*) begin
-        case(sel[3:0])
-            1 : r_result =  in1 <  in2;
-            2 : r_result = sin1 < sin2;
-            3 : r_result = in1 + in2;
-            4 : r_result = in1 - in2;
-            5 : r_result = in1 ^ in2;
-            6 : r_result = in1 | in2;
-            7 : r_result = in1 & in2;
-            8 : r_result = in1   << in2[4:0];
-            9 : r_result = in1   >> in2[4:0];
-            10: r_result = sin1 >>> in2[4:0];
-            default        : r_result = imm;
-        endcase
-    end
-    assign result = r_result;
-   
-    wire w_op0 = (bsel[0]  & ( in1 ==  in2));
-    wire w_op1 = (bsel[1]  & ( in1 !=  in2));
-    wire w_op2 = (bsel[2]  & (sin1 <  sin2));
-    wire w_op3 = (bsel[3]  & (sin1 >= sin2));
-    wire w_op4 = (bsel[4]  & ( in1 <   in2));
-    wire w_op5 = (bsel[5]  & ( in1 >=  in2));
-    assign out = {bsel[6], w_op5, w_op4, w_op3, w_op2, w_op1, w_op0};
-endmodule
-`else
-/********************************************************************************************/
 module m_ALU (in1, in2, imm, s, result, bsel, out);
     input  wire [31:0] in1, in2, imm;
     input  wire [10:0] s;      // select signal for ALU
@@ -287,10 +140,10 @@ module m_ALU (in1, in2, imm, s, result, bsel, out);
     wire w_op5 = (bsel[5]  & ( in1 >=  in2));
     assign out = {bsel[6], w_op5, w_op4, w_op3, w_op2, w_op1, w_op0};
 endmodule
-`endif
+
 
 /********************************************************************************************/
-module RVCore(CLK, RST_X, r_rout, r_halt, I_ADDR, D_ADDR, I_IN, D_IN, D_OUT, D_WE);
+module RVCore(CLK, RST_X, r_rout, r_halt, I_ADDR, D_ADDR, I_IN, D_IN, D_OUT, D_WE, D_RE, D_STALL);
     input  wire        CLK, RST_X;
     output reg  [31:0] r_rout;
     output reg         r_halt;
@@ -298,6 +151,8 @@ module RVCore(CLK, RST_X, r_rout, r_halt, I_ADDR, D_ADDR, I_IN, D_IN, D_OUT, D_W
     input  wire [31:0] I_IN, D_IN;
     output wire [31:0] D_OUT;
     output wire  [3:0] D_WE;
+    output wire        D_RE;
+    input  wire        D_STALL;
 
     /**************************** Architecture Register and Pipeline Register ***************/
     reg [17:0] r_pc          = `START_PC; // Program Counter
@@ -385,76 +240,74 @@ module RVCore(CLK, RST_X, r_rout, r_halt, I_ADDR, D_ADDR, I_IN, D_IN, D_OUT, D_W
     wire w_bmis = ExMa_b & (ExMa_b_rslt ? ExMa_b_rslt_t1 : ExMa_b_rslt_t2);
     wire [17:0] w_pc_true = {((ExMa_b_rslt) ? ExMa_tkn_pc[17:2]: ExMa_npc[17:2]), 2'b00};
 
-
-`ifdef D_SIMPLE_BTB /*********************************************/
-    wire w_btkn = (w_btkn_t & w_pht[1]); // BTB says tkn, when pred tkn and prev insn untkn
-    
-    wire [15:0] w_npc = (w_bmis) ? w_pc_true[17:2] : (w_stall) ? r_pc[17:2] : 
-                        (w_btkn) ? w_btb[19:4]     : r_pc[17:2]+1;
-    always @(posedge CLK) r_pc <= {w_npc, 2'b00};
-
-    wire [27:0] w_btbd = {1'b1, ExMa_pc[17:11], ExMa_tkn_pc, 2'b00};
-    wire [27:0] w_btb;
-    m_BTB m_BTB(CLK, ExMa_b, ExMa_pc[10:2], w_btbd, w_npc[8:0], w_btb);
-
-    wire w_btkn_t = (w_btb[27] & (w_btb[23:20]==r_pc[14:11]));
-`else /***********************************************************/
-    reg [27:0] r_btb=0;
-    reg r_btkn_t=0; // BTB taken temporal, valid, and tag match, prev insn untkn
+    reg  [27:0] r_btb=0;
+    wire [14:0] w_pht;
+    reg         r_btkn_t = 0; // BTB taken temporal, valid, and tag match, prev insn untkn
+    reg         IdEx_luse_x = 0;
     wire w_btkn = (r_btkn_t & w_pht[1]); // BTB says tkn, when pred tkn and prev insn untkn
 
-    wire [15:0] w_npc = (w_bmis) ? w_pc_true[17:2] : (IdEx_luse_x & w_btkn) ? r_btb[19:4] : r_pc[17:2]+IdEx_luse_x;
+    wire [15:0] w_npc = (w_bmis) ? w_pc_true[17:2] : ((IdEx_luse_x & ~D_STALL) & w_btkn) ? r_btb[19:4] : r_pc[17:2]+(IdEx_luse_x & ~D_STALL);
     
 //    wire [15:0] w_npc = (w_bmis) ? w_pc_true[17:2] : (w_stall) ? r_pc[17:2] :
 //                (w_btkn) ? r_btb[19:4]     : r_pc[17:2]+1;
-    always @(posedge CLK) r_pc <= {w_npc, 2'b00};
+    always @(posedge CLK) begin
+        r_pc <= {w_npc, 2'b00};
+    end
 
-    wire w_pc_untkn = (w_bmis | w_stall | w_btkn) ? 0 : 1; //prev insn untkn
+    wire w_pc_untkn = (w_bmis | (w_stall | D_STALL) | w_btkn) ? 0 : 1; //prev insn untkn
 
     wire [27:0] w_btbd = {1'b1, ExMa_ppc[17:11], ExMa_tkn_pc, 2'b00};
     wire [27:0] w_btb;
-    m_BTB m_BTB(CLK, ExMa_b, ExMa_ppc[10:2], w_btbd, w_npc[8:0], w_btb);
+    m_BTB m_BTB(CLK, ExMa_b, ExMa_ppc[10:2], w_btbd, w_npc[8:0], w_btb, D_STALL);
 
 //    always @(posedge CLK) r_btkn_t <= (w_btb[27] & (w_btb[23:20]==w_npc[12:9])) & w_pc_untkn;
 //    always @(posedge CLK) r_btkn_t <= (w_btb[27] & (w_btb[23:20]==r_pc[14:11])) & w_pc_untkn;
-    always @(posedge CLK) r_btkn_t <= (w_btb[27] & (w_btb[26:20]==r_pc[17:11])) & w_pc_untkn;
-    always @(posedge CLK) r_btb <= w_btb;
-    
-`endif /**********************************************************/
+    always @(posedge CLK) begin
+        if (!D_STALL) begin
+            r_btkn_t <= (w_btb[27] & (w_btb[26:20]==r_pc[17:11])) & w_pc_untkn;
+        end
+    end
+    always @(posedge CLK) begin
+        if (!D_STALL) begin
+            r_btb <= w_btb;
+        end
+    end
 
     /********** for gshare branch predictor *************************************************/
     wire Ma_tkn = (ExMa_b_rslt!=0);                 // taken by branch or jump
     wire Ma_bb  = (ExMa_b & ExMa_bru_ctrl[6]==0);   // valid branch insn
-    wire If_vbb = ~w_stall & (w_ir[6:2]==5'b11000); // valid branch, not stall and branch
+    wire If_vbb = ~(w_stall | D_STALL) & (w_ir[6:2]==5'b11000); // valid branch, not stall and branch
 
     reg  [12:0] r_bhr    = 0; /* branch history register (speculatively updated) */
     reg  [12:0] r_bhr_d  = 0; /* branch history register (decided, or fixed)     */
     reg  [14:0] r_pht_wd = 0; /* PHT write data   */
     reg         r_pht_we = 0; /* PHT write enable */
     
-    wire [14:0] w_pht;
-    m_PHT m_PHT(CLK, r_pht_we, r_pht_wd, w_npc[12:0], r_bhr, w_pht);
+    m_PHT m_PHT(CLK, r_pht_we, r_pht_wd, w_npc[12:0], r_bhr, w_pht, D_STALL);
 
     wire [12:0] w_bhr_d = (Ma_bb) ? {r_bhr_d[11:0], Ma_tkn} : r_bhr_d;
     wire [12:0] w_pht_idx = ExMa_ppc[14:2] ^ r_bhr_d;
-    always @(posedge CLK) begin
-        r_bhr    <= (w_bmis) ? w_bhr_d : (If_vbb) ? {r_bhr[11:0], w_btkn} : r_bhr;
-        r_bhr_d  <= w_bhr_d;
-        r_pht_wd <= {ExMa_bp[14:2], w_tbc}; // Note
-        r_pht_we <= ExMa_b;  // update PHT by Jump and Branch
-    end
-
+    reg [14:0] ExMa_bp = 0;
     wire [1:0] w_tbc_t = ExMa_bp[1:0];
     wire [1:0] w_tbc = ( Ma_tkn & w_tbc_t<3) ? w_tbc_t+1 :
                        (!Ma_tkn & w_tbc_t>0) ? w_tbc_t-1 : w_tbc_t;
+    always @(posedge CLK) begin
+        if (!D_STALL) begin
+            r_bhr    <= (w_bmis) ? w_bhr_d : (If_vbb) ? {r_bhr[11:0], w_btkn} : r_bhr;
+            r_bhr_d  <= w_bhr_d;
+            r_pht_wd <= {ExMa_bp[14:2], w_tbc}; // Note
+            r_pht_we <= ExMa_b;  // update PHT by Jump and Branch
+        end
+    end
   
     reg [14:0] IfId_bp = 0;
     reg [14:0] IdEx_bp = 0;
-    reg [14:0] ExMa_bp = 0;
     always @(posedge CLK) begin
-        IfId_bp <= (w_stall) ? IfId_bp : w_pht;
-        IdEx_bp <= IfId_bp;
-        ExMa_bp <= (!RST_X) ? 0 : IdEx_bp;
+        if (!D_STALL) begin
+            IfId_bp <= (w_stall) ? IfId_bp : w_pht;
+            IdEx_bp <= IfId_bp;
+            ExMa_bp <= (!RST_X) ? 0 : IdEx_bp;
+        end
     end
 
     assign I_ADDR = {w_npc, 2'b00};
@@ -472,26 +325,28 @@ module RVCore(CLK, RST_X, r_rout, r_halt, I_ADDR, D_ADDR, I_IN, D_IN, D_OUT, D_W
     decoder_if dec_if0(w_ir, If_rd, If_rs1, If_rs2, w_mem_we, w_reg_we, w_op_ld, w_op_im);
 
     always @(posedge CLK) begin
-        IfId_v        <= (w_bmis) ? 0 : (w_stall) ? IfId_v      : 1;
-        IfId_mem_we   <= (w_bmis) ? 0 : (w_stall) ? IfId_mem_we : w_mem_we;
-        IfId_reg_we   <= (w_bmis) ? 0 : (w_stall) ? IfId_reg_we : w_reg_we;
-        IfId_rd       <= (w_bmis) ? 0 : (w_stall) ? IfId_rd     : If_rd;
-        IfId_op_ld    <= (w_bmis) ? 0 : (w_stall) ? IfId_op_ld  : w_op_ld;
-        IfId_s1       <= (w_bmis | w_stall) ? 0 : ((If_rs1==IfId_rd) & IfId_reg_we);
-        IfId_s2       <= (w_bmis | w_stall) ? 0 : ((If_rs2==IfId_rd) & IfId_reg_we);
-        if(!w_stall) begin
-            IfId_rs1    <= If_rs1;
-            IfId_rs2    <= If_rs2;
-            IfId_op     <= w_ir[6:0];
-            IfId_pc     <= r_pc;
-            IfId_pc_n   <= {w_npc, 2'b00};
-            IfId_ir     <= w_ir;
-            IfId_funct3 <= w_ir[14:12];
-            IfId_op_im  <= w_op_im;
-            IfId_im_s   <= (w_ir[6:2]==5'b01101) ? 3'b001 :    // LUI
-                           (w_ir[6:2]==5'b00101) ? 3'b010 :    // AUIPC
-                           (w_ir[6:2]==5'b11001) ? 3'b100 :    // JALR
-                           (w_ir[6:2]==5'b11011) ? 3'b100 : 0; // JAL
+        if (!D_STALL) begin
+            IfId_v        <= (w_bmis) ? 0 : (w_stall) ? IfId_v      : 1;
+            IfId_mem_we   <= (w_bmis) ? 0 : (w_stall) ? IfId_mem_we : w_mem_we;
+            IfId_reg_we   <= (w_bmis) ? 0 : (w_stall) ? IfId_reg_we : w_reg_we;
+            IfId_rd       <= (w_bmis) ? 0 : (w_stall) ? IfId_rd     : If_rd;
+            IfId_op_ld    <= (w_bmis) ? 0 : (w_stall) ? IfId_op_ld  : w_op_ld;
+            IfId_s1       <= (w_bmis | w_stall) ? 0 : ((If_rs1==IfId_rd) & IfId_reg_we);
+            IfId_s2       <= (w_bmis | w_stall) ? 0 : ((If_rs2==IfId_rd) & IfId_reg_we);
+            if(!w_stall) begin
+                IfId_rs1    <= If_rs1;
+                IfId_rs2    <= If_rs2;
+                IfId_op     <= w_ir[6:0];
+                IfId_pc     <= r_pc;
+                IfId_pc_n   <= {w_npc, 2'b00};
+                IfId_ir     <= w_ir;
+                IfId_funct3 <= w_ir[14:12];
+                IfId_op_im  <= w_op_im;
+                IfId_im_s   <= (w_ir[6:2]==5'b01101) ? 3'b001 :    // LUI
+                               (w_ir[6:2]==5'b00101) ? 3'b010 :    // AUIPC
+                               (w_ir[6:2]==5'b11001) ? 3'b100 :    // JALR
+                               (w_ir[6:2]==5'b11011) ? 3'b100 : 0; // JAL
+            end
         end
     end
 
@@ -501,7 +356,7 @@ module RVCore(CLK, RST_X, r_rout, r_halt, I_ADDR, D_ADDR, I_IN, D_IN, D_OUT, D_W
     wire [31:0] Id_imm;
     decoder_id dec_id0(IfId_ir, Id_alu_ctrl, Id_bru_ctrl, Id_imm);
 
-    regfile regs0(CLK, IfId_rs1, IfId_rs2, w_rrs1, w_rrs2, 1'b1, MaWb_rd, MaWb_rslt);
+    regfile regs0(CLK, IfId_rs1, IfId_rs2, w_rrs1, w_rrs2, 1'b1, MaWb_rd, MaWb_rslt, D_STALL);
     
     /***** control signal for data forwarding *****/
     wire w_fwd_s1 = (IfId_rs1==ExMa_rd) & (ExMa_reg_we);
@@ -513,54 +368,46 @@ module RVCore(CLK, RST_X, r_rout, r_halt, I_ADDR, D_ADDR, I_IN, D_IN, D_OUT, D_W
     wire Id_luse = r_RST | !IdEx_luse &
          (IfId_op_ld) & ((w_ir[19:15]==IfId_rd) | (w_ir[24:20]==IfId_rd));
                    // Note: this condition of load-use may gererate false dependency
-    reg IdEx_luse_x=0;
     always @(posedge CLK) begin
-        IdEx_v        <= (w_bmis | w_stall) ? 0 : IfId_v;
-        IdEx_op_ld    <= (w_bmis | w_stall) ? 0 : IfId_op_ld;
-        IdEx_mem_we   <= (w_bmis | w_stall) ? 0 :IfId_mem_we;
-        IdEx_reg_we   <= (w_bmis | w_stall) ? 0 :IfId_reg_we;
-        IdEx_luse     <= Id_luse;
-        IdEx_luse_x   <= !Id_luse;
-        IdEx_op       <= IfId_op;
-        IdEx_pc       <= IfId_pc;
-        IdEx_pc_n     <= IfId_pc_n;
-        IdEx_rd       <= IfId_rd;
-        IdEx_ir       <= IfId_ir;
-        IdEx_funct3   <= IfId_funct3;
-        IdEx_imm      <= Id_imm;
-        IdEx_alu_ctrl <= {(Id_alu_ctrl[9] |Id_alu_ctrl[8]), Id_alu_ctrl};
-        IdEx_bru_ctrl <= Id_bru_ctrl;
-        IdEx_JALR     <= (IfId_op[6:2]==5'b11001);
-        IdEx_st_we[0] <= ((w_bmis | w_stall) ? 0 :IfId_mem_we) & (IfId_funct3[1:0]==0);
-        IdEx_st_we[1] <= ((w_bmis | w_stall) ? 0 :IfId_mem_we) & IfId_funct3[0];
-        IdEx_st_we[2] <= ((w_bmis | w_stall) ? 0 :IfId_mem_we) & IfId_funct3[1];
-        IdEx_s1       <= {32{Id_s1}};
-        IdEx_s2       <= {32{Id_s2}};
-        IdEx_u1       <= {32{!Id_s1 & w_fwd_s1}};
-        IdEx_u2       <= {32{!Id_s2 & w_fwd_s2}};
-        IdEx_alu_imm  <= (IfId_im_s[0]) ? {IfId_ir[31:12], 12'b0}           :   
-                         (IfId_im_s[1]) ? IfId_pc + {IfId_ir[31:12], 12'b0} :   
-                         (IfId_im_s[2]) ? IfId_pc + 4                       : 0;
+        if (!D_STALL) begin
+            IdEx_v        <= (w_bmis | w_stall) ? 0 : IfId_v;
+            IdEx_op_ld    <= (w_bmis | w_stall) ? 0 : IfId_op_ld;
+            IdEx_mem_we   <= (w_bmis | w_stall) ? 0 : IfId_mem_we;
+            IdEx_reg_we   <= (w_bmis | w_stall) ? 0 : IfId_reg_we;
+            IdEx_luse     <= Id_luse;
+            IdEx_luse_x   <= !Id_luse;
+            IdEx_op       <= IfId_op;
+            IdEx_pc       <= IfId_pc;
+            IdEx_pc_n     <= IfId_pc_n;
+            IdEx_rd       <= IfId_rd;
+            IdEx_ir       <= IfId_ir;
+            IdEx_funct3   <= IfId_funct3;
+            IdEx_imm      <= Id_imm;
+            IdEx_alu_ctrl <= {(Id_alu_ctrl[9] |Id_alu_ctrl[8]), Id_alu_ctrl};
+            IdEx_bru_ctrl <= Id_bru_ctrl;
+            IdEx_JALR     <= (IfId_op[6:2]==5'b11001);
+            IdEx_st_we[0] <= ((w_bmis | w_stall) ? 0 :IfId_mem_we) & (IfId_funct3[1:0]==0);
+            IdEx_st_we[1] <= ((w_bmis | w_stall) ? 0 :IfId_mem_we) & IfId_funct3[0];
+            IdEx_st_we[2] <= ((w_bmis | w_stall) ? 0 :IfId_mem_we) & IfId_funct3[1];
+            IdEx_s1       <= {32{Id_s1}};
+            IdEx_s2       <= {32{Id_s2}};
+            IdEx_u1       <= {32{!Id_s1 & w_fwd_s1}};
+            IdEx_u2       <= {32{!Id_s2 & w_fwd_s2}};
+            IdEx_alu_imm  <= (IfId_im_s[0]) ? {IfId_ir[31:12], 12'b0}           :   
+                             (IfId_im_s[1]) ? IfId_pc + {IfId_ir[31:12], 12'b0} :   
+                             (IfId_im_s[2]) ? IfId_pc + 4                       : 0;
+        end
     end
 
-`ifdef D_SIMPLE_DFWD    
     always @(posedge CLK) begin
-        IdEx_rrs1     <= (Id_s1 | w_fwd_s1) ? 0 : w_rrs1;
-        IdEx_rrs2     <= (Id_s2 | w_fwd_s2) ? 0 : (IfId_op_im) ? Id_imm : w_rrs2;
+        if (!D_STALL) begin
+            IdEx_rrs1     <= (Id_s1 | w_fwd_s1) ? 0 : w_rrs1;
+            IdEx_rrs2     <= (Id_s2 | w_fwd_s2) ? 0 : (IfId_op_im) ? Id_imm : w_rrs2;
+        end
     end
     /**************************** EX  *******************************************************/
     wire [31:0] Ex_rrs1 = ((IdEx_s1) & ExMa_rslt) ^ ((IdEx_u1) & MaWb_rslt) ^ IdEx_rrs1;
     wire [31:0] Ex_rrs2 = ((IdEx_s2) & ExMa_rslt) ^ ((IdEx_u2) & MaWb_rslt) ^ IdEx_rrs2;
-    
-`else
-    always @(posedge CLK) begin
-        IdEx_rrs1     <= (IfId_s1) ? 0 : (w_fwd_s1) ? MaRslt : w_rrs1;
-        IdEx_rrs2     <= (IfId_s2) ? 0 : (w_fwd_s2) ? MaRslt : (IfId_op_im) ? Id_imm : w_rrs2;
-    end
-    /**************************** EX  *******************************************************/
-    wire [31:0] Ex_rrs1 = ((IdEx_s1) & ExMa_rslt) ^ IdEx_rrs1;
-    wire [31:0] Ex_rrs2 = ((IdEx_s2) & ExMa_rslt) ^ IdEx_rrs2;
-`endif
     
     wire    [6:0]  w_b_rslt;  // BRU result
     wire    [31:0] w_a_rslt;  // ALU result
@@ -575,26 +422,28 @@ module RVCore(CLK, RST_X, r_rout, r_halt, I_ADDR, D_ADDR, I_IN, D_IN, D_OUT, D_W
                IdEx_bru_ctrl, w_b_rslt);
 
     always @(posedge CLK) begin
-        ExMa_v        <= (w_bmis) ? 0 : IdEx_v;
-        ExMa_reg_we   <= (w_bmis) ? 0 : IdEx_reg_we;
-        ExMa_b        <= (!RST_X || w_bmis || IdEx_v==0) ? 0 : (IdEx_bru_ctrl!=0);
-        ExMa_rslt     <= w_a_rslt;
-        ExMa_b_rslt   <= w_b_rslt;
-        ExMa_ir       <= IdEx_ir;
-        ExMa_pc       <= IdEx_pc;   // pc of this instruction
-        ExMa_ppc      <= IdEx_pc-4;
-        ExMa_npc      <= IdEx_pc+4; // next pc
-        ExMa_pc_n     <= IdEx_pc_n; // predicted_next pc
-        ExMa_tkn_pc   <= w_tkn_pc;  // taken pc
-        ExMa_op       <= IdEx_op;
-        ExMa_rd       <= IdEx_rd;
-        ExMa_op_ld    <= IdEx_op_ld;
-        ExMa_addr     <= D_ADDR[1:0];
-        ExMa_wdata    <= D_OUT;
-        ExMa_b_rslt_t1<= (w_tkn_pc   !=IdEx_pc_n); // to detect branch pred miss
-        ExMa_b_rslt_t2<= ((IdEx_pc+4)!=IdEx_pc_n); // to detect branch pred miss
-        ExMa_bru_ctrl <= IdEx_bru_ctrl;
-        ExMa_funct3   <= IdEx_funct3;
+        if (!D_STALL) begin
+            ExMa_v        <= (w_bmis) ? 0 : IdEx_v;
+            ExMa_reg_we   <= (w_bmis) ? 0 : IdEx_reg_we;
+            ExMa_b        <= (!RST_X || w_bmis || IdEx_v==0) ? 0 : (IdEx_bru_ctrl!=0);
+            ExMa_rslt     <= w_a_rslt;
+            ExMa_b_rslt   <= w_b_rslt;
+            ExMa_ir       <= IdEx_ir;
+            ExMa_pc       <= IdEx_pc;   // pc of this instruction
+            ExMa_ppc      <= IdEx_pc-4;
+            ExMa_npc      <= IdEx_pc+4; // next pc
+            ExMa_pc_n     <= IdEx_pc_n; // predicted_next pc
+            ExMa_tkn_pc   <= w_tkn_pc;  // taken pc
+            ExMa_op       <= IdEx_op;
+            ExMa_rd       <= IdEx_rd;
+            ExMa_op_ld    <= IdEx_op_ld;
+            ExMa_addr     <= D_ADDR[1:0];
+            ExMa_wdata    <= D_OUT;
+            ExMa_b_rslt_t1<= (w_tkn_pc   !=IdEx_pc_n); // to detect branch pred miss
+            ExMa_b_rslt_t2<= ((IdEx_pc+4)!=IdEx_pc_n); // to detect branch pred miss
+            ExMa_bru_ctrl <= IdEx_bru_ctrl;
+            ExMa_funct3   <= IdEx_funct3;
+        end
     end
 
     /***** for store instruction *****/
@@ -602,64 +451,52 @@ module RVCore(CLK, RST_X, r_rout, r_halt, I_ADDR, D_ADDR, I_IN, D_IN, D_OUT, D_W
     wire [3:0] w_we_sh = (IdEx_st_we[1]) ? (4'b0011 << {D_ADDR[1], 1'b0}) : 0;
     wire [3:0] w_we_sw = (IdEx_st_we[2]) ? 4'b1111                        : 0;
     assign D_WE = {4{!w_bmis}} & (w_we_sh ^ w_we_sw ^ w_we_sb);
+    assign D_RE = (IdEx_op_ld)? 1 : 0;
     
     always @(posedge CLK) begin
-        ExMa_lds <= (!IdEx_op_ld) ? 0 :
-                    (IdEx_funct3==3'b000) ? 5'b01001 :
-                    (IdEx_funct3==3'b001) ? 5'b01010 :
-                    (IdEx_funct3==3'b010) ? 5'b00100 :
-                    (IdEx_funct3==3'b100) ? 5'b00001 :
-                                            5'b00010 ;
+        if (!D_STALL) begin
+            ExMa_lds <= (!IdEx_op_ld) ? 0 :
+                        (IdEx_funct3==3'b000) ? 5'b01001 :
+                        (IdEx_funct3==3'b001) ? 5'b01010 :
+                        (IdEx_funct3==3'b010) ? 5'b00100 :
+                        (IdEx_funct3==3'b100) ? 5'b00001 : 5'b00010 ;
+        end
     end
     /**************************** MEM *******************************************************/
     wire [1:0]  w_adr  = ExMa_addr;
     wire [7:0]  w_lb_t = D_IN >> ({w_adr, 3'd0});
     wire [15:0] w_lh_t = (w_adr[1]) ? D_IN[31:16] : D_IN[15:0];
 
-`ifdef D_SIMPLE_DMOUT /**************************************************/
-    initial $write("Config: Simple DMEM output is used\n");
-    
-    wire [31:0] w_ld_lb  = {{24{w_lb_t[7]}},  w_lb_t[7:0]};
-    wire [31:0] w_ld_lbu = {24'd0,            w_lb_t[7:0]};
-    wire [31:0] w_ld_lh  = {{16{w_lh_t[15]}}, w_lh_t[15:0]};
-    wire [31:0] w_ld_lhu = {16'd0,            w_lh_t[15:0]};
-    wire [31:0] w_ld_lw  = D_IN;
-
-    reg [31:0] r_ld=0;
-    always @(*) begin
-        case(ExMa_funct3)
-            3'b000 : r_ld = w_ld_lb;
-            3'b001 : r_ld = w_ld_lh;
-            3'b010 : r_ld = w_ld_lw;
-            3'b100 : r_ld = w_ld_lbu;
-            3'b101 : r_ld = w_ld_lhu;
-            default: r_ld = 0;
-        endcase
-    end
-    wire [31:0] Ma_rslt = (ExMa_op_ld) ? r_ld : ExMa_rslt;
-    
-`else /******************************************************************/
     wire [31:0] w_ld_lb  = (ExMa_lds[0]) ? {{24{w_lb_t[ 7] & ExMa_lds[3]}}, w_lb_t[ 7:0]} : 0;
     wire [31:0] w_ld_lh  = (ExMa_lds[1]) ? {{16{w_lh_t[15] & ExMa_lds[3]}}, w_lh_t[15:0]} : 0;
     wire [31:0] w_ld_lw  = (ExMa_lds[2]) ? D_IN                             : 0;
     wire [31:0] Ma_rslt = w_ld_lb ^ w_ld_lh ^ w_ld_lw ^ ExMa_rslt;
-`endif /*****************************************************************/
     
     always @(posedge CLK) begin
-        MaWb_v     <= ExMa_v;
-        MaWb_pc    <= ExMa_pc;
-        MaWb_ir    <= ExMa_ir;
-        MaWb_wdata <= ExMa_wdata;
-        MaWb_rd    <= (ExMa_v) ? ExMa_rd : 0;
-        MaWb_rslt  <= Ma_rslt;
+        if (!D_STALL) begin
+            MaWb_v     <= ExMa_v;
+            MaWb_pc    <= ExMa_pc;
+            MaWb_ir    <= ExMa_ir;
+            MaWb_wdata <= ExMa_wdata;
+            MaWb_rd    <= (ExMa_v) ? ExMa_rd : 0;
+            MaWb_rslt  <= Ma_rslt;
+        end
     end
 
     /**************************** others ****************************************************/
     initial r_halt = 0;
-    always @(posedge CLK) if (ExMa_op==`OPCODE_HALT____) r_halt <= 1; /// Note
+    always @(posedge CLK) begin
+        if (!D_STALL) begin
+            if (ExMa_op==`OPCODE_HALT____) r_halt <= 1; /// Note
+        end
+    end
 
     initial r_rout = 0;
-    always @(posedge CLK) r_rout <= (MaWb_v) ? MaWb_pc : r_rout; /// Note
+    always @(posedge CLK) begin
+        if (!D_STALL) begin
+            r_rout <= (MaWb_v) ? MaWb_pc : r_rout; /// Note
+        end
+    end
 endmodule
 
 /***** Instraction decoder, see RV32I opcode map                                        *****/
@@ -697,23 +534,6 @@ module decoder_id(ir, alu_ctrl, bru_ctrl, imm);
         endcase
     end
 
-`ifdef D_SIMPLE_ALU /***************************************************/
-    always @(*) begin
-        case(r_alu_ctrl)
-            `ALU_CTRL_SLTU__ : alu_ctrl = 1;
-            `ALU_CTRL_SLT___ : alu_ctrl = 2;
-            `ALU_CTRL_ADD___ : alu_ctrl = 3;
-            `ALU_CTRL_SUB___ : alu_ctrl = 4;
-            `ALU_CTRL_XOR___ : alu_ctrl = 5;
-            `ALU_CTRL_OR____ : alu_ctrl = 6;
-            `ALU_CTRL_AND___ : alu_ctrl = 7;
-            `ALU_CTRL_SLL___ : alu_ctrl = 8;
-            `ALU_CTRL_SRL___ : alu_ctrl = 9;
-            `ALU_CTRL_SRA___ : alu_ctrl = 10;
-            default          : alu_ctrl = 0;
-        endcase
-    end
-`else /****************************************************************/
     always @(*) begin /***** one-hot encoding *****/
         case(r_alu_ctrl)
             `ALU_CTRL_SLTU__ : alu_ctrl = 10'b0000000001;
@@ -729,7 +549,6 @@ module decoder_id(ir, alu_ctrl, bru_ctrl, imm);
             default          : alu_ctrl = 10'b0000000000;
         endcase
     end
-`endif /****************************************************************/
     
     always @(*) begin /***** one-hot encoding *****/
         case(op)
