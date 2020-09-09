@@ -1,5 +1,4 @@
 #!/bin/bash
-# This file should be placed in the same folder as the verilog file containing the top module
 
 if (( $# != 3 )); then
     echo "Usage: ./vivado.sh <#threads> <walltime(hour(s))> <vivado version (e.g., 20183, 20191, etc.)>"
@@ -32,9 +31,9 @@ set -x # enables a mode of the shell where all executed commands are printed to 
 vivado_num_threads=$(( $1 <= 8 ? $1 : 8 ))
 vivado_runtime_max_days=$(( $2 / 24 ))
 vivado_runtime_max_hours=$(( $2 - 24 * $vivado_runtime_max_days ))
+out_dir="${current_dir}/vivado"
 set +x # disables "set -x"
 
-out_dir="${current_dir}/vivado"
 mkdir -p $out_dir
 
 tcl_file="${current_dir}/vivado.tcl"
