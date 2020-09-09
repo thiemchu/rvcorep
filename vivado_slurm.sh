@@ -1,7 +1,7 @@
 #!/bin/bash
 
 if (( $# != 3 )); then
-    echo "Usage: ./vivado.sh <#threads> <walltime(hour(s))> <vivado version (e.g., 20183, 20191, etc.)>"
+    echo "Usage: ./vivado_slurm.sh <#threads> <walltime(hour(s))> <vivado version (e.g., 20183, 20191, etc.)>"
     echo "Got $# args"
     exit
 fi
