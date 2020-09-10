@@ -84,4 +84,4 @@ The IP core can also be generated using Vivado in GUI mode.
 make
 make run
 ```
-The simulation of executing the verification programs in ```verification/bench/``` and ```verification/embench/``` (especially those in the latter) are very time-consuming. For example, the execution of ```verification/embench/wikisort.mem``` takes more than 30 minutes in our environment (Core i9 9900K CPU with 64GB DDR4 memory).
+The simulation of executing the verification programs in ```verification/bench/``` and ```verification/embench/``` (especially those in the latter) is very time-consuming. For example, the execution of ```verification/embench/wikisort.mem``` takes more than 30 minutes in our environment (Core i9 9900K CPU with 64GB DDR4 memory).
