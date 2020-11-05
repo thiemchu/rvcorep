@@ -1,3 +1,10 @@
+# Detailed explanations(in Japanese) (especially [4] and [5]):
+- [1] https://www.acri.c.titech.ac.jp/wordpress/archives/6048
+- [2] https://www.acri.c.titech.ac.jp/wordpress/archives/6767
+- [3] https://www.acri.c.titech.ac.jp/wordpress/archives/7284
+- [4] https://www.acri.c.titech.ac.jp/wordpress/archives/8036
+- [5] https://www.acri.c.titech.ac.jp/wordpress/archives/8070
+
 # RVCoreP
 [RVCoreP](https://www.arch.cs.titech.ac.jp/wk/rvcore/doku.php?id=start) is a five-stage pipelined RISC-V soft processor developed by [Miyazaki et al.](https://arxiv.org/pdf/2002.03568.pdf) at Tokyo Institute of Technology.
 
@@ -21,7 +28,7 @@ We also add Verilog code for simulating the DRAM-based design in which we emulat
  - ```clk_wiz_1/```, ```common/```, ```dram/```: DRAM controller implementation
  - ```sim/```, ```Makefile```, ```simsrc```: for simulation
  - ```config.vh``` defines some parameters for the design (see later explanation)
- - ```data_memory.v```: datamemory implementation using DRAM
+ - ```data_memory.v```: data memory implementation using DRAM
  - ```proc.v```: processor core implementation
  - ```uart.v```: implementation for program loader and serial port communication
  - ```main.v```: top module of the design
