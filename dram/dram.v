@@ -234,7 +234,7 @@ module DRAM #(
     dc (
         // input clock (166.67MHz),
         // reference clock (200MHz),
-        // reset (active-low)
+        // reset (active-high)
         .sys_clk(sys_clk),
         .ref_clk(ref_clk),
         .sys_rst(sys_rst),
